@@ -1,0 +1,29 @@
+[BEGIN]
+  ObjTp=FSgntr
+  Sgntr=ArchiveManifest
+  RelVrs=4.2000.00
+  IsProgram=0
+  TopLevelProgram=Atlona AT-LINE-PRO4-GEN2.umc
+[END]
+[BEGIN]
+  ObjTp=ArchiveItem
+  File=Atlona AT-LINE-PRO4-GEN2.umc
+  Scope=1
+[END]
+[BEGIN]
+  ObjTp=ArchiveItem
+  File=Atlona AT-LINE-PRO4 Help.pdf
+  Scope=1
+  Module=Atlona AT-LINE-PRO4-GEN2.umc
+[END]
+[BEGIN]
+  ObjTp=ArchiveItem
+  File=Atlona AT-Line-Pro4-Gen2.ush
+  Scope=2
+[END]
+[BEGIN]
+  ObjTp=ArchiveItem
+  File=Atlona AT-LINE-PRO4 Help.pdf
+  Scope=2
+  Module=Atlona AT-Line-Pro4-Gen2.ush
+[END]

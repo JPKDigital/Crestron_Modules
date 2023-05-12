@@ -1,0 +1,953 @@
+/*******************************************************************************************
+  SIMPL+ Module Information
+  (Fill in comments below)
+*******************************************************************************************/
+/*
+Dealer Name: Jeff Kettell
+System Name: Atlona AT-LINE-PRO4-GEN2 AV Switcher Module
+System Number:
+Programmer:    Jeff Kettell
+Comments: Version 1.0
+Date: 05/23
+*/
+
+/*******************************************************************************************
+  Compiler Directives
+  (Uncomment and declare compiler directives as needed)
+*******************************************************************************************/
+// #ENABLE_DYNAMIC
+#SYMBOL_NAME "Atlona AT-LINE-PRO4-GEN2 AV Switch V1.0"
+// #HINT ""
+// #DEFINE_CONSTANT
+// #CATEGORY "" 
+ #PRINT_TO_TRACE
+// #DIGITAL_EXPAND 
+// #ANALOG_SERIAL_EXPAND 
+// #OUTPUT_SHIFT 
+#HELP_PDF_FILE "Atlona AT-LINE-PRO4 Help.pdf"
+#DEFAULT_VOLATILE
+#ENABLE_STACK_CHECKING
+#ENABLE_TRACE
+// #ENCODING_ASCII
+// #ENCODING_UTF16
+// #ENCODING_INHERIT_FROM_PARENT
+// #ENCODING_INHERIT_FROM_PROGRAM
+/*
+#HELP_BEGIN
+   (add additional lines of help lines)
+#HELP_END
+*/
+
+/*******************************************************************************************
+  Include Libraries
+  (Uncomment and include additional libraries as needed)
+*******************************************************************************************/
+// #CRESTRON_LIBRARY ""
+// #USER_LIBRARY ""
+
+/*******************************************************************************************
+  DIGITAL, ANALOG and SERIAL INPUTS and OUTPUTS
+  (Uncomment and declare inputs and outputs as needed)
+*******************************************************************************************/
+BUFFER_INPUT FROM_DEVICE$[100];
+
+DIGITAL_INPUT powerStateOn, 
+	powerStateOff, 
+	audioMute, 
+	keyMenu, 
+	keyUp, 
+	keyDown, 
+	keyLeft, 
+	keyRight, 
+	keyEnter, 
+	volUp, 
+	volDown,
+	timerIn;
+
+ANALOG_INPUT currentInput, 
+	outputEdid, 
+	pictureSize,
+	pictureMode, 
+	contrastLevel, 
+	brightnessLevel, 
+	hueLevel, 
+	saturationLevel,
+	sharpnessLevel, 
+	volumeLevel, 
+	positionHorizontal, 
+	positionVertical,
+	colorTemp,
+	levelRed,
+	levelGreen,
+	levelBlue;
+	
+DIGITAL_OUTPUT  powerStateOnFb,
+	powerStateOffFb, 
+	audioMuteFb;
+	
+ANALOG_OUTPUT currentInputFb, 
+	outputEdidFb, 
+	pictureSizeFb,
+	pictureModeFb, 
+	contrastLevelFb, 
+	brightnessLevelFb, 
+	hueLevelFb, 
+	saturationLevelFb, 
+	sharpnessLevelFb,
+	volumeLevelFb,
+	positionHorizontalFb,
+	positionVerticalFb,
+	colorTempFb,
+	levelRedFb,
+	levelGreenFb,
+	levelBlueFb;
+	
+	
+STRING_OUTPUT TO_DEVICE$;  
+
+
+/*******************************************************************************************
+  Structure Definitions
+  (Uncomment and define structure definitions as needed)
+  Note:  Be sure to initialize all declared STRING variables as needed
+         For example, in Function Main: struct.myString = "";
+*******************************************************************************************/
+
+STRUCTURE commands
+{    
+          STRING prefix[5];
+          STRING cmd[30];  
+          STRING data[25][25];
+};
+
+commands Power; 
+commands Source;
+commands Audio;
+commands Mute;
+commands Edid;
+commands Size;
+commands Mode;
+commands Contrast;
+commands Brightness;
+commands Hue;
+commands Saturation;
+commands Sharpness;
+commands Keys;
+commands PositionH;
+commands PositionV;
+commands Colortemperature;
+commands Red;
+commands Green;
+commands Blue;
+
+
+
+/*******************************************************************************************
+  Global Variables
+  (Uncomment and declare global variables as needed)
+  Note:  Be sure to initialize all declared STRING variables as needed
+         For example, in Function Main: myString = "";
+*******************************************************************************************/
+STRING outputString[100]; 
+STRING commandArray[6][14];
+STRING pollingArray[20][17];    
+
+
+/*******************************************************************************************
+  Functions
+  (Add any additional functions here)
+  Note:  Functions must be physically placed before the location in
+         the code that calls them.
+*******************************************************************************************/ 
+
+INTEGER_FUNCTION indexOfStr(STRING array[], STRING str)
+{
+	INTEGER i, c;
+	i = GetNumArrayCols(array);
+	if (i > 0) {
+		for (c = 1 to i) {
+			if (array[c] = str) {
+				return (c);
+			}
+		}				
+	}
+ 
+   return (0);             
+}
+
+INTEGER_FUNCTION convToAnalog(STRING source, INTEGER isVol)
+{
+ 	if (isVol = 1) {
+ 		return (MULDIV(ATOI(source),65535,42));
+ 	}
+    else
+    {
+    	return (MULDIV(ATOI(source),65535,101));
+    }
+
+} 
+
+INTEGER_FUNCTION convFromAnalog(STRING source, INTEGER isVol)
+{
+	if (isVol = 1) {
+    	return (MULDIV(ATOI(source),42,65535));
+    }
+    else
+    {
+    	return (MULDIV(ATOI(source),101,65535));
+    } 
+
+}
+
+
+
+
+Function sendCommand(string cmd)
+{
+	TO_DEVICE$ = cmd + "\r";
+}
+
+Function buildCommand(STRING commandType, STRING commandAction)
+{
+ 	STRING cmd[50];
+ 	cmd = commandType + " " + commandAction; // + "\r"; 
+ 	TRACE("Sending command : %s", cmd);
+ 	sendCommand(cmd); 	
+}
+
+STRING_FUNCTION processSimpleFeedback(STRING c, STRING v)
+{
+   TRACE("Processing SIMPLE feedback with %s, %s", c,v);
+
+    if (c = "SOURCE") {
+	
+		currentInputFb = indexOfStr(Source.data,v);
+	}
+	else if (c = "OUTPUT")
+	{
+		outputEdidFb = indexOfStr(Edid.data,v);		
+	}
+	else if (c = "SIZE")
+	{
+		pictureSizeFb = indexOfStr(Size.data,v);
+	}
+	else if (c = "COLORTEMP")
+	{
+		colorTempFb = indexOfStr(ColorTemperature.data,v);
+	}
+	else if (c = "PICTUREMODE")
+	{
+		pictureModeFb = indexOfStr(Mode.data,v);
+	}
+	else if (c = "AUDIOMUTE")
+	{
+	    if (v = "ON") {
+	    audioMuteFb = 1;
+	    }
+	    else if (v = "OFF") {
+	    audioMuteFb = 0;
+	    }
+	}
+	else if (c = "POWER")
+	{  
+		if (v = "OFF")
+		{   
+			powerStateOnFb = 0;
+			powerStateOffFb = 1;
+		}
+		else if (v = "ON")
+		{  
+			powerStateOnFb = 1;
+			powerStateOffFb = 0;
+		}
+	}	  
+RETURN ("");
+}	
+
+FUNCTION processScaledFeedback(STRING c, STRING v)
+{	
+	TRACE("Processing SCALED feedback with %s, %s", c,v);
+	
+	if (c = "AAUD")
+	{       
+		volumeLevelFb = convToAnalog(v,1);
+		
+	} 
+    else if (c = "CONTRAST") 
+    {
+    	contrastLevelFb = convToAnalog(v,0);
+    }
+    else if (c = "BRIGHTNESS") 
+    {
+    	brightnessLevelFb = convToAnalog(v,0);
+    }
+	else if (c = "HUE") 
+    {
+    	hueLevelFb = convToAnalog(v,0);
+    }
+	else if (c = "SATURATION") 
+    {
+    	saturationLevelFb = convToAnalog(v,0);
+    }
+	else if (c = "SHARPNESS")
+    {
+    	sharpnessLevelFb = convToAnalog(v,0);
+    }
+	else if (c = "PCHPOSITION") 
+    {
+    	positionHorizontalFb = convToAnalog(v,0);
+    }
+    else if (c = "PCVPOSITION") 
+    {
+    	positionVerticalFb = convToAnalog(v,0);
+    }
+	else if (c = "RED") 
+    {
+    	levelRedFb = convToAnalog(v,0);
+    }
+	else if (c = "GREEN") 
+    {
+    	levelGreenFb = convToAnalog(v,0);
+    }
+    else if (c = "BLUE") 
+    {
+    	levelBlueFb = convToAnalog(v,0);
+    }
+
+    
+
+
+}
+
+ 
+Function processFeedback(STRING cmdIn, STRING val)
+{
+    INTEGER i;
+    INTEGER match;
+    INTEGER numCols;
+    
+    numCols = GetNumArrayRows(commandArray);
+ 
+    match = 0;     
+    
+     for (i = 0 to numCols) { 
+         if (commandArray[i] != cmdIn) {
+             continue;
+         }
+
+         match = 1;
+         processSimpleFeedback(cmdIn,val);
+         return;
+    }
+
+    if (match = 0) {    
+      processScaledFeedback(cmdIn,val);
+    }    
+} 
+ 
+Function pollingCommand()
+{
+	INTEGER i;
+	STRING pollCommand[20];
+	TRACE("Polling Switcher for current status...");
+	for (i = 0 to GetNumArrayCols(pollingArray)) {
+		 MAKESTRING(pollCommand,"R %s", pollingArray[i]);
+		 sendCommand(pollCommand); 
+		 DELAY(75);
+	}
+}
+
+STRING_FUNCTION getCleanedCommand(STRING dataIn)
+{
+	STRING dataString[75];
+	STRING dataCmd[25];	
+	
+	dataString = RIGHT(dataIn,(LEN(dataIn) - (FIND(">",dataIn) + 1)));
+   	dataCmd = LEFT(dataString,(FIND(" ", dataString)-1));
+
+    return (dataCmd);
+}
+
+
+STRING_FUNCTION getCleanedValue(STRING dataIn)
+{
+	STRING dataString[75];
+	STRING dataValue[25];
+	STRING suffixString[4];
+	
+	dataString = RIGHT(dataIn,(LEN(dataIn) - (FIND(">",dataIn) + 1)));
+    dataValue = RIGHT(dataString,(LEN(dataString) - FIND(" ", dataString)));
+	suffixString =  RIGHT(dataString,2);
+	
+ 	if (suffixString = "\r\n") { // Most, but not all, commands arrive with a trailing "\r\n".			
+ 		dataValue = LEFT(dataValue, (LEN(dataValue) - 2));
+ 	}
+		
+    return (dataValue);
+}
+
+
+
+/*******************************************************************************************
+  Event Handlers
+  (Uncomment and declare additional event handlers as needed)
+*******************************************************************************************/
+/*
+  DIGITAL EVENT HANDLERS
+*/
+PUSH powerStateOn
+{
+ 	STRING value[2];
+ 	STRING builtCommand[50];
+ 	MAKESTRING(builtCommand,"%s %s 1",Power.prefix,Power.cmd);
+ 	TRACE("Newly Assembled power command is %s",builtCommand);
+ 	sendCommand(builtCommand);
+
+}
+PUSH powerStateOff
+{     
+	INTEGER i;
+ 	STRING value[2];
+ 	STRING builtCommand[50];
+ 	MAKESTRING(builtCommand,"%s %s 0",Power.prefix,Power.cmd);
+ 	TRACE("Newly Assembled power command is %s",builtCommand);
+ 	sendCommand(builtCommand);   
+ 	
+}
+PUSH audioMute
+{
+ 	STRING value[2];
+ 	STRING builtCommand[50];
+ 	MAKESTRING(builtCommand,"%s %s 1",Mute.prefix,Mute.cmd);
+ 	TRACE("Newly Assembled Audio command is %s",builtCommand);
+ 	sendCommand(builtCommand);
+
+} 
+RELEASE audioMute
+{
+ 	STRING value[2];
+ 	STRING builtCommand[50];
+ 	MAKESTRING(builtCommand,"%s %s 0",Mute.prefix,Mute.cmd);
+ 	TRACE("Newly Assembled Audio command is %s",builtCommand);
+ 	sendCommand(builtCommand);
+
+}
+
+PUSH keyMenu
+{
+ 	STRING value[2];
+ 	STRING builtCommand[50];
+ 	MAKESTRING(builtCommand,"%s %s",Keys.prefix,"MENU");
+ 	TRACE("Newly Assembled Key command is %s",builtCommand);
+ 	sendCommand(builtCommand);
+
+}
+PUSH keyUp
+{
+ 	STRING value[2];
+ 	STRING builtCommand[50];
+ 	MAKESTRING(builtCommand,"%s %s",Keys.prefix,"UP");
+ 	TRACE("Newly Assembled Key command is %s",builtCommand);
+ 	sendCommand(builtCommand);
+
+}
+PUSH keyDown
+{
+ 	STRING value[2];
+ 	STRING builtCommand[50];
+ 	MAKESTRING(builtCommand,"%s %s",Keys.prefix,"DOWN");
+ 	TRACE("Newly Assembled Key command is %s",builtCommand);
+ 	sendCommand(builtCommand);
+
+}
+PUSH keyLeft
+{
+ 	STRING value[2];
+ 	STRING builtCommand[50];
+ 	MAKESTRING(builtCommand,"%s %s",Keys.prefix,"LEFT");
+ 	TRACE("Newly Assembled Key command is %s",builtCommand);
+ 	sendCommand(builtCommand);
+
+}
+PUSH keyRight
+{
+ 	STRING value[2];
+ 	STRING builtCommand[50];
+ 	MAKESTRING(builtCommand,"%s %s",Keys.prefix,"RIGHT");
+ 	TRACE("Newly Assembled Key command is %s",builtCommand);
+ 	sendCommand(builtCommand);
+
+}
+PUSH keyEnter
+{
+ 	STRING value[2];
+ 	STRING builtCommand[50];
+ 	MAKESTRING(builtCommand,"%s %s",Keys.prefix,"ENTER");
+ 	TRACE("Newly Assembled Key command is %s",builtCommand);
+ 	sendCommand(builtCommand);
+
+}
+PUSH volUp
+{
+	STRING value[2];
+	STRING builtCommand[50];
+	MAKESTRING(builtCommand,"%s %s", Keys.prefix,"AAUD+");
+	TRACE("Newly Assembled Volume Key command is %s", builtCommand);
+	sendCommand(builtCommand);
+
+}
+
+PUSH volDown
+{
+	STRING value[2];
+	STRING builtCommand[50];
+	MAKESTRING(builtCommand,"%s %s", Keys.prefix,"AAUD-");
+	TRACE("Newly Assembled Volume Key command is %s", builtCommand);
+	sendCommand(builtCommand);
+
+}
+
+PUSH timerIn
+{
+	pollingCommand();
+}
+
+
+
+/*
+	ANALOG INPUT EVENT HANDLERS
+*/
+
+
+ 
+CHANGE currentInput 
+{
+	STRING inputString[10];
+	STRING builtCommand[50];
+	
+	inputString = Source.data[currentInput];
+	MAKESTRING(builtCommand,"%s %s %d",Source.prefix,Source.cmd, currentInput);
+	TRACE("Source Change Detected! New Source Should Be %s",inputString);
+	TRACE("Source Change Command is %s", builtCommand);
+	sendCommand(builtCommand);
+	
+}
+
+CHANGE outputEdid
+{
+	STRING edidString[10];
+	STRING builtCommand[50];
+	
+	edidString = Edid.data[outputEdid];
+	MAKESTRING(builtCommand,"%s %s %d",Edid.prefix,Edid.cmd,outputEdid);
+	TRACE("Output EDID change detected, setting to %s",edidString);
+	sendCommand(builtCommand);	
+
+} 
+
+CHANGE pictureSize
+{
+    STRING pictureSizeString[15];
+    STRING builtCommand[50];
+    
+    pictureSizeString = Size.data[pictureSize];
+    MAKESTRING(builtCommand,"%s %s %d", Size.prefix, Size.cmd,pictureSize);
+    TRACE("Picture Mode change detected, setting to %s", pictureSizeString);
+    sendCommand(builtCommand);
+    
+} 
+
+CHANGE pictureMode
+{
+    STRING pictureModeString[15];
+    STRING builtCommand[50];
+    
+    pictureModeString = Mode.data[pictureMode];
+    MAKESTRING(builtCommand,"%s %s %d", Mode.prefix, Mode.cmd,pictureMode);
+    TRACE("Picture Mode change detected, setting to %s", pictureModeString);
+    sendCommand(builtCommand);
+    
+} 
+
+
+CHANGE contrastLevel
+{
+ 	STRING builtCommand[50];
+ 	STRING initialLevel[10];
+ 	INTEGER scaledLevel;
+ 	
+ 	initialLevel = ITOA(contrastLevel);
+  	scaledLevel = convFromAnalog(initialLevel,0); 
+ 	
+	TRACE("Contrast Level incoming: %u", contrastLevel); 	
+ 	MAKESTRING(builtCommand,"%s %s %u", Contrast.prefix,Contrast.cmd,scaledLevel);
+ 	sendCommand(builtCommand);
+
+}
+
+CHANGE brightnessLevel
+{
+ 	STRING builtCommand[50];
+ 	STRING initialLevel[10];
+ 	INTEGER scaledLevel;
+ 	
+ 	initialLevel = ITOA(brightnessLevel);
+  	scaledLevel = convFromAnalog(initialLevel,0);
+	TRACE("Brightness Level incoming: %u", brightnessLevel); 	
+ 	MAKESTRING(builtCommand,"%s %s %d", Brightness.prefix,Brightness.cmd,scaledLevel);
+ 	sendCommand(builtCommand);
+
+}
+
+CHANGE hueLevel
+{
+ 	STRING builtCommand[50];
+ 	STRING initialLevel[10];
+ 	INTEGER scaledLevel;
+ 	
+ 	initialLevel = ITOA(hueLevel);
+  	scaledLevel = convFromAnalog(initialLevel,0);
+	TRACE("Hue Level incoming: %u", hueLevel); 	
+ 	MAKESTRING(builtCommand,"%s %s %d", Hue.prefix,Hue.cmd,scaledLevel);
+ 	sendCommand(builtCommand);
+
+}
+
+CHANGE saturationLevel
+{
+ 	STRING builtCommand[50];
+ 	STRING initialLevel[10];
+ 	INTEGER scaledLevel;
+ 	
+ 	initialLevel = ITOA(saturationLevel);
+  	scaledLevel = convFromAnalog(initialLevel,0);
+	TRACE("Saturation Level incoming: %u", saturationLevel); 	
+ 	MAKESTRING(builtCommand,"%s %s %d", Saturation.prefix,Saturation.cmd,scaledLevel);
+ 	sendCommand(builtCommand);
+
+}
+
+CHANGE sharpnessLevel
+{
+ 	STRING builtCommand[50];
+ 	STRING initialLevel[10];
+ 	INTEGER scaledLevel;
+ 	
+ 	initialLevel = ITOA(sharpnessLevel);
+  	scaledLevel = convFromAnalog(initialLevel,0);
+	TRACE("Sharpness Level incoming: %u", sharpnessLevel); 	
+ 	MAKESTRING(builtCommand,"%s %s %d", Sharpness.prefix,Sharpness.cmd,scaledLevel);
+ 	sendCommand(builtCommand);
+
+}
+
+CHANGE positionHorizontal
+{
+	STRING builtCommand[50];
+	STRING initialLevel[10];
+ 	INTEGER scaledLevel;
+ 	
+ 	initialLevel = ITOA(positionHorizontal);
+  	scaledLevel = convFromAnalog(initialLevel,0);
+	TRACE("Horizontal Position Level: %u", positionHorizontal);
+	MAKESTRING(builtCommand,"%s %s %d",PositionH.prefix, PositionH.cmd,scaledLevel);
+	sendCommand(builtCommand);
+
+}
+
+CHANGE positionVertical
+{
+	STRING builtCommand[50];
+	STRING initialLevel[10];
+ 	INTEGER scaledLevel;
+ 	
+ 	initialLevel = ITOA(positionVertical);
+  	scaledLevel = convFromAnalog(initialLevel,0);
+	TRACE("Vertical Position Level: %u", positionHorizontal);
+	MAKESTRING(builtCommand,"%s %s %d",PositionV.prefix, PositionV.cmd, scaledLevel);
+	sendCommand(builtCommand);
+
+}
+
+CHANGE colorTemp
+{
+	STRING builtCommand[50];
+	STRING tempString[10];
+	
+	tempString = Colortemperature.data[colorTemp];
+	
+	TRACE("Color Temp Setting: %s", tempString);
+	MAKESTRING(builtCommand,"%s %s %d",Colortemperature.prefix, Colortemperature.cmd, colorTemp);
+	sendCommand(builtCommand);
+
+}
+
+CHANGE levelRed
+{
+	STRING builtCommand[50];
+	STRING initialLevel[10];
+ 	INTEGER scaledLevel;
+ 	
+ 	initialLevel = ITOA(levelRed);
+  	scaledLevel = convFromAnalog(initialLevel,0);
+	TRACE("Red Level: %u", levelRed);
+	MAKESTRING(builtCommand,"%s %s %d",Red.prefix, Red.cmd, scaledLevel);
+	sendCommand(builtCommand);
+	
+}
+
+CHANGE levelGreen
+{
+	STRING builtCommand[50];
+	STRING initialLevel[10];
+ 	INTEGER scaledLevel;
+ 	
+ 	initialLevel = ITOA(levelGreen);
+  	scaledLevel = convFromAnalog(initialLevel,0);
+	TRACE("Green Level: %u", levelGreen);
+	MAKESTRING(builtCommand,"%s %s %d",Green.prefix, Green.cmd, scaledLevel);
+	sendCommand(builtCommand);
+
+}
+
+CHANGE levelBlue
+{
+	STRING builtCommand[50];
+	STRING initialLevel[10];
+ 	INTEGER scaledLevel;
+ 	
+ 	initialLevel = ITOA(levelBlue);
+  	scaledLevel = convFromAnalog(initialLevel,0);
+	TRACE("Blue Level: %u", levelBlue);
+	MAKESTRING(builtCommand,"%s %s %d",Blue.prefix, Blue.cmd, scaledLevel);
+	sendCommand(builtCommand);
+
+}
+
+CHANGE volumeLevel
+
+{
+	STRING builtCommand[50];
+	STRING initialLevel[10];
+ 	INTEGER scaledLevel;
+ 	
+ 	initialLevel = ITOA(volumeLevel);
+  	scaledLevel = convFromAnalog(initialLevel,1);
+	TRACE("Volume Level: %u", volumeLevel);
+	MAKESTRING(builtCommand,"%s %s %d",Audio.prefix,Audio.cmd,scaledLevel); 
+	sendCommand(builtCommand);
+
+} 
+
+
+
+// SERIAL FEEDBACK 
+
+
+
+
+
+CHANGE FROM_DEVICE$
+{      
+	STRING dataIn[100];
+	STRING dataCmd[15];
+	STRING dataValue[15];
+	STRING errNotAvailable[20];
+	STRING errNotAcceptable[20];
+	
+	dataIn = FROM_DEVICE$;
+	CLEARBUFFER(FROM_DEVICE$);
+
+    errNotAvailable = "\r\nNot Available!\r\n";
+    errNotAcceptable = "\r\nNot Acceptable!\r\n";
+
+    
+    dataCmd = getCleanedCommand(dataIn);
+    dataValue = getCleanedValue(dataIn);
+    
+    
+    if ((dataIn <> errNotAvailable) && (dataIn <> errNotAcceptable)) {           
+	    if (dataCmd <> "") 
+	    {
+	    	//debugCommands = dataValue;
+	    	processFeedback(dataCmd,dataValue);
+	    }
+	    else
+	   	{
+	    	TRACE("Data is empty, aborting feedback processing");
+	   	};
+      }
+      else
+      {
+      TRACE("ERROR -  Check device power or confirm command applies to current input.");
+      }
+      
+}
+
+/*******************************************************************************************
+  Main()
+  Uncomment and place one-time startup code here
+  (This code will get called when the system starts up)
+*******************************************************************************************/
+
+Function Main()
+{     
+	
+	//COMMAND DATA STRUCTURES
+	
+	
+	
+	Power.prefix = "S";
+	Power.cmd = "POWER";   
+	
+	Source.prefix = "S";
+	Source.cmd = "SOURCE";
+	Source.data[0] = "CV"; 
+	Source.data[1] = "SV";
+	Source.data[2] = "COMP";
+	Source.data[3] = "PC1";
+	Source.data[4] = "PC2";
+	Source.data[5] = "PC3";
+	Source.data[6] = "HDMI1";
+	Source.data[7] = "HDMI2";
+	Source.data[8] = "HDMI3";
+	Source.data[9] = "HDMI4"; 
+	
+	Audio.prefix = "S" ;
+	Audio.cmd = "AAUD";
+	
+	Mute.prefix = "S";
+	Mute.cmd = "AUDIOMUTE";
+	
+	Keys.prefix = "K";
+	
+    Edid.prefix = "S";
+    Edid.cmd = "OUTPUT";
+    Edid.data[0] = "NATIVE";
+    Edid.data[1] = "VGA"; // 640x480 @60
+    Edid.data[2] = "SVGA"; // 800x600 @60
+    Edid.data[3] = "XGA";  // 1024x768 @60
+    Edid.data[4] = "SXGA"; // 1280x1024 @60
+    Edid.data[5] = "UXGA"; // 1600x1200 @60
+    Edid.data[6] = "480I";
+    Edid.data[7] = "480P";
+    Edid.data[8] = "720P60";
+    Edid.data[9] = "1080I60";
+    Edid.data[10] = "1080P60";
+    Edid.data[11] = "576I";
+    Edid.data[12] = "576P";
+    Edid.data[13] = "720P50"; // API documentation is inaccurate here. Returns "720p50" not "720p"
+    Edid.data[14] = "1080I50";
+    Edid.data[15] = "1080P50";
+    Edid.data[16] = "WXGA"; // 1280x800 @60
+    Edid.data[17] = "WSXGA";  // 1680x1050 @60
+    Edid.data[18] = "WUXGA"; // 1920x1200 @60
+    Edid.data[19] = "720P59"; // Docs wrong
+    Edid.data[20] = "1080P59";
+    Edid.data[21] = "1080P30"; // Docs wrong
+    Edid.data[22] = "WXGA+";
+    Edid.data[23] = "SXGA+";
+    Edid.data[24] = "1366x768";  
+    
+    Size.prefix = "S";
+    Size.cmd = "SIZE";
+    Size.data[0] = "FULL";
+    Size.data[1] = "OVERSCAN";
+    Size.data[2] = "UNDERSCAN";
+    Size.data[3] = "LETTERBOX";
+    Size.data[4] = "PANSCAN";    
+    
+    Contrast.prefix = "S";
+    Contrast.cmd = "CONTRAST";
+    
+    Brightness.prefix = "S";
+    Brightness.cmd = "BRIGHTNESS"; 
+    
+    Hue.prefix = "S";
+    Hue.cmd = "HUE"; 
+    
+    Saturation.prefix = "S";
+    Saturation.cmd = "SATURATION";     
+    
+    Sharpness.prefix = "S";
+    Sharpness.cmd = "SHARPNESS";
+    
+    Mode.prefix = "S";
+    Mode.cmd = "PICTUREMODE";
+    Mode.data[0] = "STANDARD";
+	Mode.data[1] = "MOVIE";     
+	Mode.data[2] = "VIVID";
+	Mode.data[3] = "USER";
+    
+    PositionH.prefix = "S";
+    PositionH.cmd = "PCHPOSITION";     
+    
+    PositionV.prefix = "S";
+    PositionV.cmd = "PCVPOSITION"; 
+    
+    Colortemperature.prefix = "S";
+    Colortemperature.cmd = "COLORTEMP";
+    Colortemperature.data[0] = "NORMAL"; 
+    Colortemperature.data[1] = "WARM";
+    Colortemperature.data[2] = "COOL";
+    Colortemperature.data[3] = "USER";
+    
+    
+    Red.prefix = "S";
+    Red.cmd = "RED";
+    
+    Green.prefix = "S";
+    Green.cmd = "GREEN";
+    
+    Blue.prefix = "S";
+    Blue.cmd = "BLUE";
+    
+    
+
+    
+    //ARRAY FOR FEEDBACK PROCESSING 
+      
+    commandArray[0] = "SOURCE";
+    commandArray[1] = "OUTPUT";
+    commandArray[2] = "SIZE";
+    commandArray[3] = "COLORTEMP";
+    commandArray[4] = "PICTUREMODE";
+    commandArray[5] = "AUDIOMUTE";
+    commandArray[6] = "POWER"; 
+    
+    pollingArray[0] = "SOURCE";
+    pollingArray[1] = "OUTPUT";
+    pollingArray[2] = "SIZE"; 
+    pollingArray[3] = "COLORTEMP";
+    pollingArray[4] = "PICTUREMODE";
+    pollingArray[5] = "AUDIOMUTE";
+    pollingArray[6] = "POWER";       
+    pollingArray[7] = "CONTRAST";
+    pollingArray[8] = "BRIGHTNESS";
+    pollingArray[9] = "HUE";
+    pollingArray[10] = "SATURATION";
+    pollingArray[11] = "SHARPNESS";
+    pollingArray[12] = "PCHPOSITION";
+    pollingArray[13] = "PCVPOSITION";
+    pollingArray[14] = "RED";
+    pollingArray[15] = "GREEN";
+    pollingArray[16] = "BLUE";
+    pollingArray[17] = "AAUD";
+    
+    
+    //pollingCommand(); // Poll the switcher on program load
+    
+    
+    	
+
+    // TODO:  Add code here
+    // Initialize declared global and local variables/arrays as needed.
+
+    // WaitForInitializationComplete();
+    // If you are reading any Input or Output variables, uncomment
+    //   the WaitForInitializationComplete statement above and read
+    //   them afterwards.  Input/Output variables will not have
+    //   their correct values set until after the logic processor
+    //   runs and propagates the values to them.
+}
+
